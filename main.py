@@ -14,6 +14,7 @@ logging.basicConfig(
     level=logging.ERROR,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger(__name__)
 
 class AutoregApp:
     def __init__(self, root):
@@ -65,6 +66,10 @@ class AutoregApp:
         self.browser_ids_entry.insert(0, ",".join(self.config["browser_ids"]))
         self.browser_ids_entry.grid(row=2, column=1, padx=5, pady=2)
         
+        # Кнопка обновления списка профилей
+        self.refresh_btn = ttk.Button(settings_frame, text="Обновить профили", command=self.refresh_profiles)
+        self.refresh_btn.grid(row=2, column=2, padx=5, pady=2)
+        
         ttk.Label(settings_frame, text="Макс. аккаунтов:").grid(row=3, column=0, sticky="w", padx=5, pady=2)
         self.max_acc_entry = ttk.Entry(settings_frame, width=10)
         self.max_acc_entry.insert(0, str(self.config["max_accounts"]))
@@ -102,6 +107,39 @@ class AutoregApp:
         self.log_area = scrolledtext.ScrolledText(log_frame, wrap="word")
         self.log_area.pack(fill="both", expand=True, padx=5, pady=5)
         self.log_area.config(state="disabled")
+    
+    def refresh_profiles(self):
+        try:
+            token = self.bb_token_entry.get().strip()
+            if not token:
+                messagebox.showerror("Ошибка", "Введите BitBrowser Token")
+                return
+            
+            self.update_log("Запрос списка профилей...")
+            
+            profiles = bitbrowser.get_browser_list(token)
+            if not profiles:
+                self.update_log("Не удалось получить список профилей. Проверьте:", error=True)
+                self.update_log("1. BitBrowser запущен", error=True)
+                self.update_log("2. API ключ верный", error=True)
+                self.update_log("3. Порт API 54345 открыт", error=True)
+                return
+            
+            profile_ids = [p["id"] for p in profiles if "id" in p]
+            
+            if not profile_ids:
+                self.update_log("Получен пустой список профилей. Проверьте:", error=True)
+                self.update_log("1. В BitBrowser созданы профили", error=True)
+                self.update_log("2. Профили включены", error=True)
+                return
+            
+            self.config["browser_ids"] = profile_ids
+            self.browser_ids_entry.delete(0, tk.END)
+            self.browser_ids_entry.insert(0, ",".join(profile_ids))
+            self.save_config()
+            self.update_log(f"Получено {len(profile_ids)} профилей")
+        except Exception as e:
+            self.update_log(f"Ошибка обновления профилей: {str(e)}", error=True)
     
     def save_settings(self):
         try:
@@ -174,6 +212,14 @@ class AutoregApp:
             browser_id = random.choice(self.config["browser_ids"])
             
             try:
+                # Проверка существования профиля
+                if not bitbrowser.check_browser_exists(
+                    self.config["bitbrowser_token"],
+                    browser_id
+                ):
+                    self.update_log(f"Профиль {browser_id} не найден! Пропускаем...", error=True)
+                    continue
+                
                 # Подключение к BitBrowser
                 ws_url = bitbrowser.get_browser_ws(
                     self.config["bitbrowser_token"],
@@ -185,7 +231,7 @@ class AutoregApp:
                 user_data = utils.generate_user_data()
                 
                 # Получение номера телефона
-                phone = vaksms.get_number(self.config["vaksms_token"], "x5id")
+                phone, activation_id = vaksms.get_number(self.config["vaksms_token"], "x5id")
                 self.update_log(f"Получен номер: {phone}")
                 
                 # Регистрация аккаунта
@@ -199,7 +245,7 @@ class AutoregApp:
                     # Получение кода SMS
                     code = vaksms.get_code(
                         self.config["vaksms_token"], 
-                        result['activation_id']
+                        activation_id
                     )
                     
                     if code:
@@ -215,13 +261,16 @@ class AutoregApp:
                             })
                             registered_today += 1
                             self.update_log(f"Успешная регистрация! {phone} | {registered_today}/{max_acc}")
+                        else:
+                            self.update_log("Ошибка подтверждения кода", error=True)
                     else:
                         self.update_log("Не получен SMS код", error=True)
+                else:
+                    self.update_log("Ошибка регистрации", error=True)
             except Exception as e:
                 self.update_log(f"Ошибка: {str(e)}", error=True)
             finally:
                 try:
-                    # Передаем API-ключ при закрытии браузера
                     bitbrowser.close_browser(
                         self.config["bitbrowser_token"],
                         browser_id

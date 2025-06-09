@@ -4,15 +4,21 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
+import logging
+
+logger = logging.getLogger(__name__)
 
 def register_account(ws_url, phone, user_data):
-    options = Options()
-    options.add_experimental_option("debuggerAddress", ws_url.split("/")[-1])
+    # Извлекаем адрес отладки из WebSocket URL
+    debugger_address = ws_url.replace("ws://", "").split("/")[0]
     
-    driver = webdriver.Chrome(options=options)
-    driver.get("https://id.x5.ru/sign-up")
+    options = Options()
+    options.add_experimental_option("debuggerAddress", debugger_address)
     
     try:
+        driver = webdriver.Chrome(options=options)
+        driver.get("https://id.x5.ru/sign-up")
+        
         # Заполнение формы
         WebDriverWait(driver, 20).until(
             EC.visibility_of_element_located((By.NAME, "phone"))
@@ -32,20 +38,30 @@ def register_account(ws_url, phone, user_data):
         WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located((By.NAME, "code"))
         )
-        return {"success": True, "activation_id": phone}
+        return True
     
-    except TimeoutException:
-        return None
+    except TimeoutException as e:
+        logger.error(f"Timeout during registration: {str(e)}")
+        return False
+    except Exception as e:
+        logger.error(f"Error during registration: {str(e)}")
+        return False
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
 
 def confirm_code(ws_url, code):
-    options = Options()
-    options.add_experimental_option("debuggerAddress", ws_url.split("/")[-1])
+    debugger_address = ws_url.replace("ws://", "").split("/")[0]
     
-    driver = webdriver.Chrome(options=options)
+    options = Options()
+    options.add_experimental_option("debuggerAddress", debugger_address)
     
     try:
+        driver = webdriver.Chrome(options=options)
+        
+        # Предполагаем, что мы остались на странице ввода кода
         WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located((By.NAME, "code"))
         ).send_keys(code)
@@ -57,7 +73,14 @@ def confirm_code(ws_url, code):
             EC.url_contains("https://5ka.ru/")
         )
         return True
-    except TimeoutException:
+    except TimeoutException as e:
+        logger.error(f"Timeout during code confirmation: {str(e)}")
+        return False
+    except Exception as e:
+        logger.error(f"Error during code confirmation: {str(e)}")
         return False
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass

@@ -1,8 +1,10 @@
 {
     "bitbrowser_token": "d3c55587281d4da8b4e0520f19f15730",
     "vaksms_token": "1357da16767f4a4d83802a3602a0509f",
-    "max_accounts": 400,
+    "max_accounts": 1,
     "delay_min": 30,
     "delay_max": 120,
-    "browser_ids": ["55c49970100343cb949dff272d3e3261"]
+    "browser_ids": [
+        "55c49970100343cb949dff272d3e3261"
+    ]
 }

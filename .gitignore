@@ -1,2 +1,7 @@
 accounts.csv
 errors.log
+build/
+dist/
+build.spec
+dist.zip
+*-313.pyc
